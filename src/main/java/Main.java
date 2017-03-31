@@ -15,8 +15,7 @@ public class Main {
         try {
             Class.forName("org.postgresql.Driver");
             c = DriverManager
-                    .getConnection("jdbc:postgresql://localhost:5432/docker",
-                            "docker", "docker");
+                    .getConnection("jdbc:postgresql://localhost:5432/docker", "docker", "docker");
         } catch (Exception e) {
             System.err.println(e.getClass().getName() + ": " + e.getMessage());
         }
