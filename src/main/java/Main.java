@@ -28,10 +28,14 @@ public class Main {
         Statement stmt;
         try {
             stmt = c.createStatement();
-            String sql = "CREATE TABLE LIST " +
-                    "(ID SERIAL PRIMARY KEY     NOT NULL," +
-                    " NAME           TEXT    NOT NULL, " +
-                    " NUMBER            INT     NOT NULL )";
+            String sql = "CREATE TABLE public.List" +
+                    "(" +
+                    "    id SERIAL PRIMARY KEY NOT NULL," +
+                    "    name VARCHAR(200)," +
+                    "    phone INT NOT NULL," +
+                    "    expired TIME NOT NULL" +
+                    ");" +
+                    "CREATE UNIQUE INDEX List_id_uindex ON public.List (id);";
             stmt.executeUpdate(sql);
             stmt.close();
 
