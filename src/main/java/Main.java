@@ -10,32 +10,40 @@ import static spark.Spark.*;
 
 public class Main {
 
-    private static Connection db() {
-        Connection c = null;
-        try {
-            Class.forName("org.postgresql.Driver");
-            c = DriverManager
-                    .getConnection("jdbc:postgresql://localhost:5432/docker", "docker", "docker");
-        } catch (Exception e) {
-            System.err.println(e.getClass().getName() + ": " + e.getMessage());
-        }
+    private static Connection Connection = null;
 
-        return c;
-    }
-
-    private static int initialiseDB() {
-        Connection c = db();
+    private static void initialiseDB() {
         Statement stmt;
         try {
-            stmt = c.createStatement();
-            String sql = "CREATE TABLE LIST " +
+            Class.forName("org.postgresql.Driver");
+            Connection = DriverManager
+                    .getConnection("jdbc:postgresql://localhost:5432/docker", "docker", "docker");
+            stmt = Connection.createStatement();
+            String sql = "CREATE TABLE IF NOT EXISTS LIST " +
                     "(ID SERIAL PRIMARY KEY     NOT NULL," +
                     " NAME           TEXT    NOT NULL, " +
                     " NUMBER            INT     NOT NULL )";
             stmt.executeUpdate(sql);
             stmt.close();
 
-            c.close();
+            Connection.setAutoCommit(false);
+
+        } catch (Exception e) {
+            throw new Error(e.getClass().getName() + ": " + e.getMessage());
+
+        }
+    }
+
+    private static int insertItem(ListItem data) {
+        Statement stmt;
+        try {
+            stmt = Connection.createStatement();
+            String sql = "INSERT INTO LIST (NAME,NUMBER) "
+                    + "VALUES ('" + data.Name + "', " + data.Number + " );";
+            stmt.executeUpdate(sql);
+
+            stmt.close();
+            Connection.commit();
 
             return 0;
         } catch (Exception e) {
@@ -45,20 +53,16 @@ public class Main {
         }
     }
 
-    private static int insertItem(ListItem data) {
-        Connection c = db();
+    private static int updateItem(ListItem data) {
         Statement stmt;
         try {
-            c.setAutoCommit(false);
-
-            stmt = c.createStatement();
-            String sql = "INSERT INTO LIST (NAME,NUMBER) "
-                    + "VALUES ('" + data.Name + "', " + data.Number + " );";
+            stmt = Connection.createStatement();
+            String sql = "UPDATE LIST (ID,NAME,NUMBER) "
+                    + "VALUES (" + data.Id + ", '" + data.Name + "', " + data.Number + " );";
             stmt.executeUpdate(sql);
 
             stmt.close();
-            c.commit();
-            c.close();
+            Connection.commit();
 
             return 0;
         } catch (Exception e) {
@@ -69,14 +73,11 @@ public class Main {
     }
 
     private static ArrayList<ListItem> getItems() {
-        Connection c = db();
         Statement stmt;
         ArrayList<ListItem> result = new ArrayList<>();
 
         try {
-            c.setAutoCommit(false);
-
-            stmt = c.createStatement();
+            stmt = Connection.createStatement();
             ResultSet rs = stmt.executeQuery("SELECT * FROM LIST;");
 
             while (rs.next()) {
@@ -88,7 +89,6 @@ public class Main {
             }
             rs.close();
             stmt.close();
-            c.close();
 
         } catch (Exception e) {
             System.err.println(e.getClass().getName() + ": " + e.getMessage());
@@ -98,10 +98,44 @@ public class Main {
         return result;
     }
 
+    private static ListItem getItem(int id) {
+        Statement stmt;
+        ListItem result = null;
+
+        try {
+            stmt = Connection.createStatement();
+            ResultSet rs = stmt.executeQuery("SELECT * FROM LIST WHERE ID = " + id + ";");
+
+
+            result = new ListItem(
+                    rs.getInt("id"),
+                    rs.getString("name"),
+                    rs.getInt("number")
+            );
+
+            rs.close();
+            stmt.close();
+
+        } catch (Exception e) {
+            System.err.println(e.getClass().getName() + ": " + e.getMessage());
+
+        }
+
+        if (result == null) {
+            result = new ListItem(-1);
+        }
+
+        return result;
+    }
+
     private static class ListItem {
         int Id;
         String Name;
         int Number;
+
+        ListItem(int inputId) {
+            Id = inputId;
+        }
 
         ListItem(int inputId, String inputName, int inputNumber) {
             Id = inputId;
@@ -158,7 +192,38 @@ public class Main {
             return gson.toJson(b);
         });
 
-        post("/items/:item", (req, res) -> {
+        get("/items/:id", (req, res) -> {
+            res.type("application/json");
+            Gson gson = new Gson();
+            ListItem response = getItem(Integer.parseInt(req.params(":id")));
+
+            if (response.Id == -1) {
+                HttpStatus responseError = new HttpStatus(404);
+                return gson.toJson(responseError);
+            } else {
+                return gson.toJson(response);
+            }
+
+        });
+
+        post("/items/:id", (req, res) -> {
+            res.type("application/json");
+            Gson gson = new Gson();
+            ListItem item = gson.fromJson(req.body(), ListItem.class);
+            item.Id = Integer.parseInt(req.params(":id"));
+            HttpStatus response;
+
+            if (updateItem(item) == 0) {
+                response = new HttpStatus(200);
+            } else {
+                response = new HttpStatus(400);
+                res.status(400);
+            }
+
+            return gson.toJson(response);
+        });
+
+        post("/items/add", (req, res) -> {
             res.type("application/json");
             Gson gson = new Gson();
             ListItem item = gson.fromJson(req.body(), ListItem.class);
@@ -173,7 +238,6 @@ public class Main {
 
             return gson.toJson(response);
         });
-
 
     }
 
