@@ -1,8 +1,6 @@
+import java.sql.*;
 import java.util.*;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.Statement;
-import java.sql.ResultSet;
+import java.util.Date;
 
 import com.google.gson.Gson;
 
@@ -11,6 +9,7 @@ import static spark.Spark.*;
 public class Main {
 
     private static Connection Connection = null;
+    private static final Calendar tzUTC = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
 
     private static void initialiseDB() {
         Statement stmt;
@@ -23,11 +22,11 @@ public class Main {
                     "(id SERIAL PRIMARY KEY NOT NULL," +
                     "name VARCHAR(200)," +
                     "phone INT NOT NULL," +
-                    "expired TIME NOT NULL);";
+                    "expired TIMESTAMP WITH TIME ZONE NOT NULL);";
             stmt.executeUpdate(sql);
             stmt.close();
 
-            Connection.setAutoCommit(false);
+            Connection.setAutoCommit(true);
 
         } catch (Exception e) {
             throw new Error(e.getClass().getName() + ": " + e.getMessage());
@@ -36,35 +35,39 @@ public class Main {
     }
 
     private static int insertItem(ListItem data) {
-        Statement stmt;
         try {
-            stmt = Connection.createStatement();
-            String sql = "INSERT INTO LIST (NAME,PHONE,EXPIRED) "
-                    + "VALUES ('" + data.Name + "', " + data.Phone + ", " + data.Expired + " );";
+            PreparedStatement update = Connection.prepareStatement(
+                    "INSERT INTO LIST (NAME, PHONE, EXPIRED) VALUES(?,?,?);",
+                    PreparedStatement.RETURN_GENERATED_KEYS
+            );
+            update.setString(1, data.Name);
+            update.setInt(2, data.Phone);
+            update.setTimestamp(3, new Timestamp(data.Expired.getTime()), tzUTC);
 
-            stmt.executeUpdate(sql);
+            update.executeUpdate();
 
-            stmt.close();
-            Connection.commit();
+            ResultSet rs = update.getGeneratedKeys();
+            rs.next();
 
-            return 0;
+            return rs.getInt("id");
         } catch (Exception e) {
             System.err.println(e.getClass().getName() + ": " + e.getMessage());
 
-            return 1;
+            return -1;
         }
     }
 
     private static int updateItem(ListItem data) {
-        Statement stmt;
         try {
-            stmt = Connection.createStatement();
-            String sql = "UPDATE LIST (ID,NAME,PHONE) "
-                    + "VALUES (" + data.Id + ", '" + data.Name + "', " + data.Phone + " );";
-            stmt.executeUpdate(sql);
+            PreparedStatement update = Connection.prepareStatement(
+                    "INSERT INTO LIST (ID, NAME, PHONE, EXPIRED) VALUES(?,?,?,?);"
+            );
+            update.setInt(1, data.Id);
+            update.setString(2, data.Name);
+            update.setInt(3, data.Phone);
+            update.setTimestamp(4, new Timestamp(data.Expired.getTime()), tzUTC);
 
-            stmt.close();
-            Connection.commit();
+            update.executeUpdate();
 
             return 0;
         } catch (Exception e) {
@@ -87,7 +90,7 @@ public class Main {
                         rs.getInt("id"),
                         rs.getString("name"),
                         rs.getInt("phone"),
-                        rs.getDate("expired")
+                        new Date(rs.getTimestamp("expired", tzUTC).getTime())
                 ));
             }
             rs.close();
@@ -114,7 +117,7 @@ public class Main {
                     rs.getInt("id"),
                     rs.getString("name"),
                     rs.getInt("phone"),
-                    rs.getDate("expired")
+                    new Date(rs.getTimestamp("expired", tzUTC).getTime())
             );
 
             rs.close();
@@ -135,7 +138,7 @@ public class Main {
     private static class ListItem {
         int Id = -1;
         String Name = null;
-        int Phone = 0;
+        int Phone;
         Date Expired = null;
 
 
@@ -150,7 +153,7 @@ public class Main {
             Expired = inputExpired;
         }
 
-        ListItem(String inputName, int inputPhone) {
+        ListItem(String inputName, int inputPhone, Date inputExpired) {
             Name = inputName;
             Phone = inputPhone;
         }
@@ -213,6 +216,26 @@ public class Main {
 
         });
 
+        post("/items/add", (req, res) -> {
+            res.type("application/json");
+            Gson gson = new Gson();
+            ListItem item = gson.fromJson(req.body(), ListItem.class);
+            HttpStatus response;
+
+            int result = insertItem(item);
+
+            if (result == -1) {
+                response = new HttpStatus(400);
+                res.status(400);
+                return gson.toJson(response);
+            } else {
+                item = new ListItem(result);
+                return gson.toJson(item);
+            }
+
+
+        });
+
         post("/items/:id", (req, res) -> {
             res.type("application/json");
             Gson gson = new Gson();
@@ -221,22 +244,6 @@ public class Main {
             HttpStatus response;
 
             if (updateItem(item) == 0) {
-                response = new HttpStatus(200);
-            } else {
-                response = new HttpStatus(400);
-                res.status(400);
-            }
-
-            return gson.toJson(response);
-        });
-
-        post("/items/add", (req, res) -> {
-            res.type("application/json");
-            Gson gson = new Gson();
-            ListItem item = gson.fromJson(req.body(), ListItem.class);
-            HttpStatus response;
-
-            if (insertItem(item) == 0) {
                 response = new HttpStatus(200);
             } else {
                 response = new HttpStatus(400);
