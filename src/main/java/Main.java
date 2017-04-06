@@ -20,9 +20,10 @@ public class Main {
                     .getConnection("jdbc:postgresql://localhost:5432/docker", "docker", "docker");
             stmt = Connection.createStatement();
             String sql = "CREATE TABLE IF NOT EXISTS LIST " +
-                    "(ID SERIAL PRIMARY KEY     NOT NULL," +
-                    " NAME           TEXT    NOT NULL, " +
-                    " NUMBER            INT     NOT NULL )";
+                    "(id SERIAL PRIMARY KEY NOT NULL," +
+                    "name VARCHAR(200)," +
+                    "phone INT NOT NULL," +
+                    "expired TIME NOT NULL);";
             stmt.executeUpdate(sql);
             stmt.close();
 
@@ -38,8 +39,9 @@ public class Main {
         Statement stmt;
         try {
             stmt = Connection.createStatement();
-            String sql = "INSERT INTO LIST (NAME,NUMBER) "
-                    + "VALUES ('" + data.Name + "', " + data.Number + " );";
+            String sql = "INSERT INTO LIST (NAME,PHONE,EXPIRED) "
+                    + "VALUES ('" + data.Name + "', " + data.Phone + ", " + data.Expired + " );";
+
             stmt.executeUpdate(sql);
 
             stmt.close();
@@ -57,8 +59,8 @@ public class Main {
         Statement stmt;
         try {
             stmt = Connection.createStatement();
-            String sql = "UPDATE LIST (ID,NAME,NUMBER) "
-                    + "VALUES (" + data.Id + ", '" + data.Name + "', " + data.Number + " );";
+            String sql = "UPDATE LIST (ID,NAME,PHONE) "
+                    + "VALUES (" + data.Id + ", '" + data.Name + "', " + data.Phone + " );";
             stmt.executeUpdate(sql);
 
             stmt.close();
@@ -84,7 +86,8 @@ public class Main {
                 result.add(new ListItem(
                         rs.getInt("id"),
                         rs.getString("name"),
-                        rs.getInt("number")
+                        rs.getInt("phone"),
+                        rs.getDate("expired")
                 ));
             }
             rs.close();
@@ -110,7 +113,8 @@ public class Main {
             result = new ListItem(
                     rs.getInt("id"),
                     rs.getString("name"),
-                    rs.getInt("number")
+                    rs.getInt("phone"),
+                    rs.getDate("expired")
             );
 
             rs.close();
@@ -129,23 +133,26 @@ public class Main {
     }
 
     private static class ListItem {
-        int Id;
-        String Name;
-        int Number;
+        int Id = -1;
+        String Name = null;
+        int Phone = 0;
+        Date Expired = null;
+
 
         ListItem(int inputId) {
             Id = inputId;
         }
 
-        ListItem(int inputId, String inputName, int inputNumber) {
+        ListItem(int inputId, String inputName, int inputPhone, Date inputExpired) {
             Id = inputId;
             Name = inputName;
-            Number = inputNumber;
+            Phone = inputPhone;
+            Expired = inputExpired;
         }
 
-        ListItem(String inputName, int inputNumber) {
+        ListItem(String inputName, int inputPhone) {
             Name = inputName;
-            Number = inputNumber;
+            Phone = inputPhone;
         }
     }
 
